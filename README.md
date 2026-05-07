@@ -2,6 +2,10 @@
 
 在 Windows 桌面上显示斗鱼实时弹幕的透明置顶工具，适合全屏游戏、直播监看、录屏等场景。
 
+## 📸 软件预览
+
+<img width="900" alt="斗鱼弹幕飘屏界面预览" src="https://github.com/user-attachments/assets/343f9e41-fbaf-4b53-9af0-74b265c8141d" />
+
 ---
 
 ## ✨ 功能亮点
