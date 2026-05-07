@@ -1,0 +1,431 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="UTF-8" />
+    <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data:" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>斗鱼弹幕飘屏</title>
+    <style>
+      :root {
+        --primary: #FF5D23;
+        --primary-hover: #E84E1B;
+        --bg: #FFFFFF;
+        --bg-secondary: #F9FAFB;
+        --text-main: #111827;
+        --text-sub: #6B7280;
+        --border: #E5E7EB;
+        --titlebar-traffic: 56px;
+        font-family: system-ui, -apple-system, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
+      }
+
+      body {
+        margin: 0;
+        padding: 0;
+        background: transparent;
+        color: var(--text-main);
+        height: 100vh;
+        display: flex;
+        flex-direction: column;
+        overflow: hidden;
+      }
+
+      .window {
+        flex: 1;
+        background: var(--bg);
+        border-radius: 16px;
+        border: 1px solid rgba(0, 0, 0, 0.08);
+        box-shadow: 0 10px 30px rgba(0, 0, 0, 0.1);
+        display: flex;
+        flex-direction: column;
+        overflow: hidden;
+        margin: 6px;
+      }
+
+      .titlebar {
+        height: 38px;
+        background: var(--bg);
+        display: flex;
+        flex-direction: row-reverse;
+        align-items: center;
+        justify-content: space-between;
+        touch-action: none;
+        user-select: none;
+        padding: 0 12px;
+        border-bottom: 1px solid transparent;
+        transition: border-color 0.2s;
+      }
+      .titlebar-title {
+        font-size: 13px;
+        font-weight: 500;
+        color: var(--text-sub);
+        flex: 1;
+        text-align: center;
+        cursor: default;
+      }
+      .titlebar-spacer {
+        width: var(--titlebar-traffic);
+        flex-shrink: 0;
+        cursor: default;
+      }
+      .titlebar-controls {
+        display: flex;
+        flex-direction: row;
+        align-items: center;
+        gap: 8px;
+        width: var(--titlebar-traffic);
+        flex-shrink: 0;
+        justify-content: flex-end;
+        -webkit-app-region: no-drag;
+      }
+      .win-btn {
+        width: 12px;
+        height: 12px;
+        border-radius: 50%;
+        border: none;
+        padding: 0;
+        cursor: pointer;
+        flex-shrink: 0;
+        -webkit-app-region: no-drag;
+      }
+      .win-btn svg {
+        display: none;
+      }
+      .btn-close {
+        background: #FF5F56;
+      }
+      .btn-close:hover {
+        background: #FF3B30;
+      }
+      .btn-min {
+        background: #FFBD2E;
+      }
+      .btn-min:hover {
+        background: #FFB000;
+      }
+      .btn-max {
+        background: #27C93F;
+      }
+      .btn-max:hover {
+        background: #1fb536;
+      }
+
+      .content {
+        position: relative;
+        flex: 1;
+        padding: 12px 14px;
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        justify-content: center;
+        min-height: 0;
+      }
+
+      .content-meta {
+        position: absolute;
+        top: 8px;
+        right: 12px;
+        z-index: 2;
+        display: flex;
+        align-items: center;
+        justify-content: flex-end;
+        max-width: calc(100% - 24px);
+        pointer-events: none;
+      }
+
+      .main-stack {
+        width: 100%;
+        max-width: 300px;
+        display: flex;
+        flex-direction: column;
+        align-items: stretch;
+        gap: 22px;
+      }
+
+      .home-main-block {
+        display: flex;
+        flex-direction: column;
+        align-items: stretch;
+        gap: 18px;
+      }
+
+      .logo-area {
+        text-align: center;
+        margin-bottom: 0;
+        padding-bottom: 2px;
+      }
+      .logo-icon {
+        width: 48px;
+        height: 48px;
+        border-radius: 12px;
+        margin: 0 auto;
+        overflow: hidden;
+        background: var(--bg-secondary);
+        border: 1px solid var(--border);
+        box-shadow: 0 2px 8px rgba(0, 0, 0, 0.06);
+      }
+      .logo-icon .home-logo-img {
+        width: 100%;
+        height: 100%;
+        object-fit: cover;
+        display: block;
+        border-radius: 12px;
+      }
+
+      .input-box input {
+        width: 100%;
+        box-sizing: border-box;
+        padding: 13px 16px;
+        font-size: 15px;
+        text-align: center;
+        border: 2px solid var(--border);
+        border-radius: 12px;
+        background: var(--bg-secondary);
+        color: var(--text-main);
+        transition: all 0.2s;
+        outline: none;
+      }
+      .input-box input:focus {
+        background: var(--bg);
+        border-color: var(--primary);
+        box-shadow: 0 0 0 4px rgba(255, 93, 35, 0.1);
+      }
+      .input-box input::placeholder {
+        color: #9CA3AF;
+        font-weight: 400;
+      }
+
+      .status-pill {
+        box-sizing: border-box;
+        width: fit-content;
+        max-width: 100%;
+        font-size: 10px;
+        font-weight: 600;
+        letter-spacing: 0.02em;
+        color: var(--text-sub);
+        padding: 3px 8px 3px 6px;
+        border-radius: 999px;
+        background: rgba(249, 250, 251, 0.96);
+        border: 1px solid rgba(0, 0, 0, 0.06);
+        line-height: 1.25;
+        display: inline-flex;
+        align-items: center;
+        gap: 5px;
+        box-shadow: 0 1px 2px rgba(0, 0, 0, 0.04);
+        white-space: nowrap;
+        overflow: hidden;
+        text-overflow: ellipsis;
+      }
+      .status-pill::before {
+        content: '';
+        width: 5px;
+        height: 5px;
+        border-radius: 50%;
+        flex-shrink: 0;
+        background: currentColor;
+        opacity: 0.75;
+      }
+      .status-pill.ok {
+        color: #047857;
+        background: rgba(236, 253, 245, 0.97);
+        border-color: rgba(16, 185, 129, 0.25);
+      }
+      .status-pill.err {
+        color: #B91C1C;
+        background: rgba(254, 242, 242, 0.97);
+        border-color: rgba(248, 113, 113, 0.28);
+      }
+      .status-pill.warn {
+        color: #B45309;
+        background: rgba(255, 251, 235, 0.97);
+        border-color: rgba(245, 158, 11, 0.28);
+      }
+
+      .action-btn {
+        box-sizing: border-box;
+        width: 100%;
+        padding: 15px;
+        font-size: 15px;
+        font-weight: 600;
+        color: white;
+        background: var(--primary);
+        border: none;
+        border-radius: 12px;
+        cursor: pointer;
+        transition: all 0.2s;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        gap: 8px;
+        box-shadow: 0 4px 12px rgba(255, 93, 35, 0.25);
+      }
+      .action-btn:hover {
+        background: var(--primary-hover);
+        transform: translateY(-1px);
+        box-shadow: 0 6px 16px rgba(255, 93, 35, 0.3);
+      }
+      .action-btn:active {
+        transform: translateY(1px);
+        box-shadow: 0 2px 8px rgba(255, 93, 35, 0.2);
+      }
+      .action-btn.off {
+        background: var(--bg-secondary);
+        color: var(--text-main);
+        border: 1px solid var(--border);
+        box-shadow: none;
+      }
+      .action-btn.off:hover {
+        background: #F3F4F6;
+        border-color: #D1D5DB;
+      }
+
+      .app-version {
+        position: absolute;
+        right: 12px;
+        bottom: 10px;
+        z-index: 2;
+        margin: 0;
+        font-size: 12px;
+        font-weight: 500;
+        color: var(--text-sub);
+        line-height: 1.2;
+        user-select: none;
+        opacity: 0.78;
+        letter-spacing: 0.06em;
+        pointer-events: none;
+      }
+
+      .home-github-link {
+        position: absolute;
+        left: 12px;
+        bottom: 8px;
+        z-index: 2;
+        display: inline-flex;
+        align-items: center;
+        gap: 5px;
+        padding: 5px 10px;
+        border-radius: 8px;
+        color: var(--text-sub);
+        font-size: 12px;
+        font-weight: 500;
+        letter-spacing: 0.02em;
+        text-decoration: none;
+        cursor: pointer;
+        transition:
+          color 0.22s ease,
+          background 0.22s ease,
+          transform 0.22s ease,
+          box-shadow 0.22s ease;
+      }
+      .home-github-link:hover {
+        color: var(--primary);
+        background: rgba(255, 93, 35, 0.09);
+        transform: translateY(-1px);
+        box-shadow: 0 4px 12px rgba(255, 93, 35, 0.12);
+      }
+      .home-github-link:active {
+        transform: translateY(0);
+        box-shadow: 0 2px 6px rgba(255, 93, 35, 0.08);
+      }
+      .home-github-link:focus-visible {
+        outline: 2px solid var(--primary);
+        outline-offset: 2px;
+      }
+      .home-github-link svg {
+        display: block;
+        flex-shrink: 0;
+        transition: transform 0.22s ease;
+      }
+      .home-github-link:hover svg {
+        transform: scale(1.08);
+      }
+
+      .bottom-bar {
+        margin-top: 0;
+        padding-top: 2px;
+        display: flex;
+        justify-content: center;
+      }
+      .settings-link {
+        background: none;
+        border: none;
+        color: var(--text-sub);
+        font-size: 13px;
+        cursor: pointer;
+        display: flex;
+        align-items: center;
+        gap: 6px;
+        padding: 8px 14px;
+        border-radius: 8px;
+        transition: all 0.2s;
+      }
+      .settings-link:hover {
+        background: var(--bg-secondary);
+        color: var(--text-main);
+      }
+    </style>
+  </head>
+  <body>
+    <div class="window">
+      <div class="titlebar" id="titlebar">
+        <div class="titlebar-controls">
+          <button type="button" class="win-btn btn-min" id="winMin"></button>
+          <button type="button" class="win-btn btn-max" id="winMax"></button>
+          <button type="button" class="win-btn btn-close" id="winClose"></button>
+        </div>
+        <div class="titlebar-title">斗鱼弹幕飘屏</div>
+        <div class="titlebar-spacer"></div>
+      </div>
+
+      <div class="content">
+        <div class="content-meta" aria-live="polite">
+          <div id="connStatus" class="status-pill">未连接</div>
+        </div>
+
+        <div id="appVersion" class="app-version" aria-label="软件版本"></div>
+
+        <a
+          class="home-github-link"
+          href="https://github.com/qianjiachun/douyu-danmaku-overlay"
+          target="_blank"
+          rel="noopener noreferrer"
+          aria-label="小淳 · 在 GitHub 上查看源码"
+          title="小淳 · GitHub"
+        >
+          <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
+            <path
+              d="M12 0C5.37 0 0 5.37 0 12c0 5.31 3.435 9.795 8.205 11.385.6.113.825-.262.825-.582 0-.288-.012-1.243-.018-2.25-3.338.727-4.042-1.416-4.042-1.416-.546-1.387-1.333-1.756-1.333-1.756-1.089-.745.083-.73.083-.73 1.205.085 1.84 1.24 1.84 1.24 1.07 1.835 2.807 1.305 3.492.998.108-.775.418-1.305.762-1.605-2.665-.305-5.467-1.334-5.467-5.93 0-1.31.468-2.38 1.236-3.22-.124-.303-.535-1.523.117-3.176 0 0 1.008-.322 3.301 1.23A11.509 11.509 0 0 1 12 5.803c1.02.005 2.047.138 3.006.404 2.291-1.552 3.297-1.23 3.297-1.23.653 1.653.242 2.873.118 3.176.77.84 1.235 1.911 1.235 3.221 0 4.609-2.807 5.624-5.479 5.921.43.372.823 1.102.823 2.222 0 1.606-.015 2.898-.015 3.293 0 .322.216.699.825.58C20.565 21.795 24 17.295 24 12c0-6.63-5.373-12-12-12z"
+            />
+          </svg>
+          <span>小淳</span>
+        </a>
+
+        <div class="main-stack">
+          <div class="home-main-block">
+            <div class="logo-area">
+              <div class="logo-icon">
+                <img id="homeLogo" class="home-logo-img" alt="" />
+              </div>
+            </div>
+
+            <div class="input-box">
+              <input id="roomId" type="text" placeholder="输入斗鱼房间号" autocomplete="off" spellcheck="false" />
+            </div>
+
+            <button id="toggle" type="button" class="action-btn off">
+              <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polygon points="5 3 19 12 5 21 5 3"></polygon></svg>
+              <span>启动飘屏</span>
+            </button>
+          </div>
+
+          <div class="bottom-bar">
+            <button id="openSettings" type="button" class="settings-link">
+              <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"></circle><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"></path></svg>
+              设置
+            </button>
+          </div>
+        </div>
+      </div>
+    </div>
+    <script type="module" src="./home.ts"></script>
+  </body>
+</html>

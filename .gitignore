@@ -1,0 +1,10 @@
+node_modules
+out
+release
+dist
+*.log
+.DS_Store
+Thumbs.db
+package-lock.json
+.pnpm-debug.log*
+.cursor

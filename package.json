@@ -1,0 +1,65 @@
+{
+  "name": "douyu-danmaku-overlay",
+  "version": "1.0.0",
+  "description": "斗鱼弹幕透明飘屏（Windows）",
+  "main": "out/main/index.js",
+  "type": "module",
+  "packageManager": "pnpm@9.15.9",
+  "scripts": {
+    "dev": "electron-vite dev",
+    "build": "electron-vite build",
+    "preview": "electron-vite preview",
+    "typecheck": "tsc --noEmit -p tsconfig.node.json && tsc --noEmit -p tsconfig.web.json",
+    "postinstall": "electron-builder install-app-deps",
+    "clean:dist": "node -e \"try{require('node:fs').rmSync('release',{recursive:true,force:true})}catch(_){}\"",
+    "dist": "pnpm run clean:dist && electron-vite build && electron-builder --win portable",
+    "dist:setup": "pnpm run clean:dist && electron-vite build && electron-builder --win nsis",
+    "dist:all": "pnpm run dist && pnpm run dist:setup",
+    "dist:dir": "pnpm run clean:dist && electron-vite build && electron-builder --win --dir",
+    "dist:portable": "pnpm run clean:dist && electron-vite build && electron-builder --win portable"
+  },
+  "dependencies": {
+    "ws": "^8.18.0"
+  },
+  "devDependencies": {
+    "@types/node": "^22.10.2",
+    "@types/ws": "^8.5.13",
+    "electron": "^33.2.1",
+    "electron-builder": "^25.1.8",
+    "electron-vite": "^2.3.0",
+    "typescript": "~5.7.2",
+    "vite": "^5.4.11"
+  },
+  "build": {
+    "appId": "com.douyu.danmaku.overlay",
+    "productName": "斗鱼弹幕飘屏",
+    "directories": {
+      "output": "release",
+      "buildResources": "resources"
+    },
+    "files": [
+      "out/**",
+      "package.json"
+    ],
+    "extraResources": [
+      {
+        "from": "resources/icon.png",
+        "to": "icon.png"
+      }
+    ],
+    "win": {
+      "executableName": "DouyuDanmaku",
+      "target": [
+        "portable"
+      ]
+    },
+    "nsis": {
+      "oneClick": false,
+      "allowToChangeInstallationDirectory": true,
+      "unicode": true,
+      "shortcutName": "斗鱼弹幕飘屏"
+    }
+  },
+  "author": "",
+  "license": "MIT"
+}
