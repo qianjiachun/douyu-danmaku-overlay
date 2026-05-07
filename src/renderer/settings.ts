@@ -3,7 +3,8 @@ import {
   parseBlockWordsText,
   type AppConfig,
   type DuplicateDanmakuMode,
-  type OverlayAreaPreset
+  type OverlayAreaPreset,
+  type OverlayDisplayListItem
 } from '../shared/config'
 import { bindTitlebarChrome } from './titlebarChrome'
 
@@ -51,7 +52,46 @@ function readBlockNicks(): string[] {
   return parseBlockWordsText($('blockNicks').value)
 }
 
-function syncFromConfig(c: AppConfig): void {
+function displaySelect(): HTMLSelectElement {
+  return document.getElementById('overlayDisplay') as HTMLSelectElement
+}
+
+function syncDisplaySelection(c: AppConfig): void {
+  const sel = displaySelect()
+  if (c.overlayDisplayMode === 'specific' && c.overlayDisplayId) {
+    const hit = [...sel.options].some((o) => o.value === c.overlayDisplayId)
+    if (hit) {
+      sel.value = c.overlayDisplayId
+      return
+    }
+  }
+  sel.value = 'primary'
+}
+
+function fillOverlayDisplayOptions(items: OverlayDisplayListItem[], c: AppConfig): void {
+  const sel = displaySelect()
+  sel.innerHTML = ''
+  const prim = document.createElement('option')
+  prim.value = 'primary'
+  prim.textContent = '主显示器（默认）'
+  sel.appendChild(prim)
+  for (const it of items) {
+    const o = document.createElement('option')
+    o.value = it.id
+    o.textContent = it.label
+    sel.appendChild(o)
+  }
+  sel.disabled = items.length <= 1
+  syncDisplaySelection(c)
+}
+
+async function refreshOverlayDisplayOptions(c: AppConfig): Promise<void> {
+  if (!window.settingsApi?.listDisplays) return
+  const items = await window.settingsApi.listDisplays()
+  fillOverlayDisplayOptions(items, c)
+}
+
+function syncFormFromConfig(c: AppConfig): void {
   const blockEl = $('block')
   if (document.activeElement !== blockEl) blockEl.value = c.blockWords.join(', ')
   const blockNicksEl = $('blockNicks')
@@ -74,10 +114,47 @@ function syncFromConfig(c: AppConfig): void {
   updateLabels()
 }
 
+function syncFromConfig(c: AppConfig): void {
+  syncFormFromConfig(c)
+  syncDisplaySelection(c)
+}
+
 async function applyNow(partial: Partial<AppConfig>): Promise<void> {
   if (!window.settingsApi?.setConfig) return
   await window.settingsApi.setConfig(partial)
 }
+
+async function load(): Promise<void> {
+  if (!window.settingsApi) return
+  const c = await window.settingsApi.getConfig()
+  syncFormFromConfig(c)
+  await refreshOverlayDisplayOptions(c)
+}
+
+void load()
+
+if (window.settingsApi) {
+  window.settingsApi.onConfig((c) => {
+    syncFromConfig(c)
+  })
+}
+
+$('overlayDisplay').addEventListener('change', () => {
+  const v = displaySelect().value
+  if (v === 'primary') {
+    void applyNow({ overlayDisplayMode: 'primary', overlayDisplayId: '' })
+  } else {
+    void applyNow({ overlayDisplayMode: 'specific', overlayDisplayId: v })
+  }
+})
+
+window.addEventListener('focus', () => {
+  if (!window.settingsApi?.getConfig || !window.settingsApi.listDisplays) return
+  void (async () => {
+    const c = await window.settingsApi!.getConfig()
+    await refreshOverlayDisplayOptions(c)
+  })()
+})
 
 for (const opt of OVERLAY_AREA_OPTIONS) {
   const b = document.createElement('button')
@@ -158,17 +235,3 @@ $('block').addEventListener('blur', () => {
 $('blockNicks').addEventListener('blur', () => {
   void applyNow({ blockNicks: readBlockNicks() })
 })
-
-async function load(): Promise<void> {
-  if (!window.settingsApi) return
-  const c = await window.settingsApi.getConfig()
-  syncFromConfig(c)
-}
-
-void load()
-
-if (window.settingsApi) {
-  window.settingsApi.onConfig((c) => {
-    syncFromConfig(c)
-  })
-}

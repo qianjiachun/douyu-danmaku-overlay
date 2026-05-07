@@ -3,7 +3,18 @@ import type { DanmakuPayload } from './types'
 /** 相同弹幕文案出现时的处理方式 */
 export type DuplicateDanmakuMode = 'each' | 'once' | 'merge'
 
-/** 飘屏窗口相对主显示器所占区域 */
+/** 飘屏绑定的显示器：主显示器（随系统主屏变化）或指定显示器 id */
+export type OverlayDisplayMode = 'primary' | 'specific'
+
+/** 设置页与 IPC 共用的显示器条目（仅元数据，不含原生 Display 对象） */
+export interface OverlayDisplayListItem {
+  id: string
+  label: string
+  isPrimary: boolean
+  bounds: { x: number; y: number; width: number; height: number }
+}
+
+/** 飘屏窗口相对目标显示器所占区域 */
 export type OverlayAreaPreset =
   | 'full'
   | 'halfTop'
@@ -19,8 +30,12 @@ export const DEFAULT_CONFIG: AppConfig = {
   roomId: '',
   /** 总开关：关则隐藏飘屏窗口并停止拉流 */
   overlayEnabled: false,
-  /** 飘屏层占据屏幕的区域（主显示器） */
+  /** 飘屏层占据屏幕的区域（相对下方选中的显示器） */
   overlayArea: 'full',
+  /** 飘屏绑定主显示器或指定显示器 */
+  overlayDisplayMode: 'primary',
+  /** `specific` 时使用 Electron display id，否则为空 */
+  overlayDisplayId: '',
   fontSize: 22,
   fontColor: '#ffffff',
   opacity: 0.92,
@@ -53,6 +68,9 @@ export interface AppConfig {
   /** 是否显示飘屏并连接弹幕源 */
   overlayEnabled: boolean
   overlayArea: OverlayAreaPreset
+  overlayDisplayMode: OverlayDisplayMode
+  /** 仅在 overlayDisplayMode 为 specific 时有效 */
+  overlayDisplayId: string
   fontSize: number
   fontColor: string
   /** 0–1，窗口整体透明度（Electron 层） */
@@ -101,6 +119,10 @@ function normalizeOverlayArea(v: unknown): OverlayAreaPreset {
     : DEFAULT_CONFIG.overlayArea
 }
 
+function normalizeOverlayDisplayMode(v: unknown): OverlayDisplayMode {
+  return v === 'specific' ? 'specific' : 'primary'
+}
+
 const DUPLICATE_MODES: readonly DuplicateDanmakuMode[] = ['each', 'once', 'merge']
 
 /** 屏蔽词分隔：英文逗号与中文逗号 */
@@ -136,6 +158,13 @@ function normalizeDuplicateMode(v: unknown): DuplicateDanmakuMode {
 export function mergeConfig(partial: Partial<AppConfig> | undefined): AppConfig {
   const merged = { ...DEFAULT_CONFIG, ...(partial ?? {}) } as AppConfig & { blockUserIds?: unknown }
   merged.overlayArea = normalizeOverlayArea(merged.overlayArea)
+  merged.overlayDisplayMode = normalizeOverlayDisplayMode(merged.overlayDisplayMode)
+  merged.overlayDisplayId = String(merged.overlayDisplayId ?? '').trim()
+  if (merged.overlayDisplayMode !== 'specific') {
+    merged.overlayDisplayId = ''
+  } else if (!merged.overlayDisplayId) {
+    merged.overlayDisplayMode = 'primary'
+  }
   merged.duplicateDanmakuMode = normalizeDuplicateMode(merged.duplicateDanmakuMode)
   merged.duplicateMergeWindowSec = Math.min(
     300,

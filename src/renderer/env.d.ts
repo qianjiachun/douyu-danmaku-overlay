@@ -1,4 +1,5 @@
-import type { AppConfig } from '../shared/config'
+import type { AppConfig, OverlayDisplayListItem } from '../shared/config'
+import type { UpdateCheckResult } from '../shared/updateCheck'
 import type { DanmakuPayload } from '../shared/types'
 import type { DouyuStatusPayload } from '../shared/douyuStatus'
 
@@ -24,6 +25,10 @@ declare global {
       onConfig: (cb: (c: AppConfig) => void) => () => void
       onDouyuStatus: (cb: (s: DouyuStatusPayload) => void) => () => void
       getAppVersion: () => Promise<string>
+      checkUpdate: (force?: boolean) => Promise<UpdateCheckResult>
+      openExternal: (url: string) => Promise<boolean>
+      onUpdateInfo: (cb: (r: UpdateCheckResult) => void) => () => void
+      listDisplays: () => Promise<OverlayDisplayListItem[]>
     }
   }
 }

@@ -1,10 +1,28 @@
 import type { AppConfig } from '../shared/config'
 import type { DouyuStatusPayload } from '../shared/douyuStatus'
+import type { UpdateCheckResult } from '../shared/updateCheck'
 import { bindTitlebarChrome } from './titlebarChrome'
 
 const roomEl = document.getElementById('roomId') as HTMLInputElement
 const connEl = document.getElementById('connStatus')!
 const toggleEl = document.getElementById('toggle') as HTMLButtonElement
+const verEl = document.getElementById('appVersion')
+const updateHintEl = document.getElementById('updateHint') as HTMLButtonElement | null
+
+let lastUpdateOpenUrl: string | null = null
+
+function applyUpdateHint(r: UpdateCheckResult): void {
+  lastUpdateOpenUrl = null
+  if (!updateHintEl) return
+  if (r.ok && r.hasUpdate && r.openUrl && r.latestVersion) {
+    lastUpdateOpenUrl = r.openUrl
+    updateHintEl.hidden = false
+    updateHintEl.textContent = `v${r.latestVersion} 可下载`
+    updateHintEl.title = '前往下载新版安装包'
+    return
+  }
+  updateHintEl.hidden = true
+}
 
 // Window controls
 document.getElementById('winClose')?.addEventListener('click', () => {
@@ -81,13 +99,22 @@ async function load(): Promise<void> {
   roomEl.value = c.roomId
   applyToggleUi(c)
 
-  const verEl = document.getElementById('appVersion')
-  if (verEl) {
+  if (verEl && window.settingsApi.getAppVersion && window.settingsApi.checkUpdate) {
     try {
-      const v = await window.settingsApi.getAppVersion()
+      const [v, upd] = await Promise.all([
+        window.settingsApi.getAppVersion(),
+        window.settingsApi.checkUpdate(false)
+      ])
       verEl.textContent = v ? `v${v}` : ''
+      applyUpdateHint(upd)
     } catch {
       verEl.textContent = ''
+      applyUpdateHint({
+        ok: false,
+        currentVersion: '',
+        hasUpdate: false,
+        checkedAt: Date.now()
+      })
     }
   }
 }
@@ -134,6 +161,11 @@ document.getElementById('openSettings')!.addEventListener('click', async () => {
   await window.settingsApi.openSettingsWindow()
 })
 
+updateHintEl?.addEventListener('click', async () => {
+  if (!lastUpdateOpenUrl || !window.settingsApi?.openExternal) return
+  await window.settingsApi.openExternal(lastUpdateOpenUrl)
+})
+
 void load()
 
 if (window.settingsApi) {
@@ -149,5 +181,9 @@ if (window.settingsApi) {
 
   window.settingsApi.onDouyuStatus((p) => {
     setConnStatus(p)
+  })
+
+  window.settingsApi.onUpdateInfo((r) => {
+    applyUpdateHint(r)
   })
 }

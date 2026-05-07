@@ -10,6 +10,7 @@ import {
   Menu,
   shell,
   dialog,
+  type Display,
   type NativeImage
 } from 'electron'
 import type { DanmakuPayload } from '../shared/types'
@@ -20,7 +21,8 @@ import {
   mergeConfig,
   shouldBlock,
   type AppConfig,
-  type OverlayAreaPreset
+  type OverlayAreaPreset,
+  type OverlayDisplayListItem
 } from '../shared/config'
 import { normalizeRoomId } from '../shared/room'
 import { DouyuWsClient } from '../douyu/client'
@@ -32,6 +34,12 @@ import {
   trayImageFromSource
 } from './appIcons'
 import { getWritableDataDirectory, isPortableExeDataMode } from './dataPaths'
+import {
+  checkForUpdates,
+  getCachedUpdateResult,
+  isAllowedExternalUrl,
+  scheduleUpdateChecks
+} from './updateService'
 
 const __dirname = dirname(fileURLToPath(import.meta.url))
 
@@ -233,9 +241,55 @@ function overlayBoundsForArea(
   }
 }
 
+/** 按配置解析飘屏所在显示器；指定 id 缺失时回退主显示器（配置仍保留，插回后可恢复） */
+function resolveOverlayDisplay(cfg: AppConfig): Display {
+  if (cfg.overlayDisplayMode === 'specific' && cfg.overlayDisplayId.trim()) {
+    const want = cfg.overlayDisplayId.trim()
+    const found = screen.getAllDisplays().find((d) => String(d.id) === want)
+    if (found) return found
+  }
+  return screen.getPrimaryDisplay()
+}
+
+/** 设置页下拉：枚举显示器（稳定排序） */
+function listOverlayDisplays(): OverlayDisplayListItem[] {
+  const primary = screen.getPrimaryDisplay()
+  const sorted = [...screen.getAllDisplays()].sort((a, b) => {
+    if (a.bounds.x !== b.bounds.x) return a.bounds.x - b.bounds.x
+    return a.bounds.y - b.bounds.y
+  })
+  let secondaryIndex = 0
+  return sorted.map((d) => {
+    const w = d.bounds.width
+    const h = d.bounds.height
+    const isPrimary = d.id === primary.id
+    const label = isPrimary
+      ? `主显示器（${w}×${h}）`
+      : (() => {
+          secondaryIndex += 1
+          return `扩展显示器 ${secondaryIndex}（${w}×${h}）`
+        })()
+    return {
+      id: String(d.id),
+      label,
+      isPrimary,
+      bounds: {
+        x: d.bounds.x,
+        y: d.bounds.y,
+        width: d.bounds.width,
+        height: d.bounds.height
+      }
+    }
+  })
+}
+
+function onDisplayLayoutChanged(): void {
+  applyOverlayBounds()
+}
+
 function applyOverlayBounds(): void {
   if (!overlayWin || overlayWin.isDestroyed()) return
-  const display = screen.getPrimaryDisplay()
+  const display = resolveOverlayDisplay(currentConfig)
   const b = overlayBoundsForArea(currentConfig.overlayArea, display.bounds)
   overlayWin.setBounds(b)
 }
@@ -401,7 +455,7 @@ function sourceConfigChanged(prev: AppConfig, next: AppConfig): boolean {
 }
 
 function createOverlayWindow(): BrowserWindow {
-  const display = screen.getPrimaryDisplay()
+  const display = resolveOverlayDisplay(currentConfig)
   const ob = overlayBoundsForArea(currentConfig.overlayArea, display.bounds)
 
   const win = new BrowserWindow({
@@ -572,7 +626,20 @@ function quitAppFully(): void {
 function rebuildTrayMenu(): void {
   if (!tray) return
   const on = currentConfig.overlayEnabled
+  const upd = getCachedUpdateResult()
   const menu = Menu.buildFromTemplate([
+    ...(upd?.ok && upd.hasUpdate && upd.openUrl && upd.latestVersion
+      ? ([
+          {
+            label: `新版本 v${upd.latestVersion}（前往下载）`,
+            click: () => {
+              const u = upd.openUrl
+              if (u && isAllowedExternalUrl(u)) void shell.openExternal(u)
+            }
+          },
+          { type: 'separator' as const }
+        ] as const)
+      : []),
     {
       label: on ? '关闭飘屏（停止连接）' : '开启飘屏',
       click: () => {
@@ -615,6 +682,22 @@ function createTray(): void {
 
 function registerIpc(): void {
   ipcMain.handle(IPC.appGetVersion, () => app.getVersion())
+
+  ipcMain.handle(IPC.appCheckUpdate, async (_e, force?: boolean) => {
+    const r = await checkForUpdates(Boolean(force))
+    rebuildTrayMenu()
+    return r
+  })
+
+  ipcMain.handle(IPC.appOpenExternal, async (_e, url: unknown) => {
+    if (typeof url !== 'string' || !url.trim()) return false
+    const u = url.trim()
+    if (!isAllowedExternalUrl(u)) return false
+    await shell.openExternal(u)
+    return true
+  })
+
+  ipcMain.handle(IPC.displayList, (): OverlayDisplayListItem[] => listOverlayDisplays())
 
   ipcMain.handle(IPC.configGet, () => currentConfig)
 
@@ -719,9 +802,16 @@ function whenReady(): void {
   createTray()
   void syncAppIcons()
 
-  screen.on('display-metrics-changed', () => {
-    applyOverlayBounds()
-  })
+  scheduleUpdateChecks(
+    () => homeWin,
+    () => {
+      rebuildTrayMenu()
+    }
+  )
+
+  screen.on('display-metrics-changed', onDisplayLayoutChanged)
+  screen.on('display-added', onDisplayLayoutChanged)
+  screen.on('display-removed', onDisplayLayoutChanged)
 
   overlayWin.webContents.on('did-finish-load', () => {
     overlayWin?.webContents.send(IPC.overlayPushConfig, currentConfig)

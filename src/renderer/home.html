@@ -278,11 +278,20 @@
         border-color: #D1D5DB;
       }
 
-      .app-version {
+      .app-version-wrap {
         position: absolute;
         right: 12px;
         bottom: 10px;
         z-index: 2;
+        display: inline-flex;
+        align-items: center;
+        justify-content: flex-end;
+        gap: 6px;
+        max-width: calc(100% - 24px);
+        flex-wrap: wrap;
+      }
+
+      .app-version-text {
         margin: 0;
         font-size: 12px;
         font-weight: 500;
@@ -292,6 +301,34 @@
         opacity: 0.78;
         letter-spacing: 0.06em;
         pointer-events: none;
+      }
+
+      .update-hint {
+        margin: 0;
+        padding: 0 0 0 2px;
+        border: none;
+        background: none;
+        font: inherit;
+        font-size: 12px;
+        font-weight: 600;
+        color: #059669;
+        line-height: 1.2;
+        cursor: pointer;
+        text-decoration: underline;
+        text-underline-offset: 2px;
+        opacity: 0.92;
+        pointer-events: auto;
+        -webkit-app-region: no-drag;
+        white-space: nowrap;
+      }
+      .update-hint:hover {
+        color: #047857;
+        opacity: 1;
+      }
+      .update-hint:focus-visible {
+        outline: 2px solid #059669;
+        outline-offset: 2px;
+        border-radius: 2px;
       }
 
       .home-github-link {
@@ -381,7 +418,12 @@
           <div id="connStatus" class="status-pill">未连接</div>
         </div>
 
-        <div id="appVersion" class="app-version" aria-label="软件版本"></div>
+        <div class="app-version-wrap" aria-label="软件版本">
+          <span id="appVersion" class="app-version-text"></span>
+          <button type="button" id="updateHint" class="update-hint" hidden title="前往下载新版安装包">
+            下载新版
+          </button>
+        </div>
 
         <a
           class="home-github-link"
