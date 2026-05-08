@@ -38,14 +38,17 @@ function updateLabels(): void {
   const fs = Number($('fontSize').value)
   const sp = Number($('speed').value)
   const bgOp = Number($('danmakuBgOpacity').value)
+  const ei = Number($('edgeInset').value)
   const oEl = document.getElementById('opacityVal')
   const fEl = document.getElementById('fontSizeVal')
   const sEl = document.getElementById('speedVal')
   const bgEl = document.getElementById('danmakuBgOpacityVal')
+  const eiEl = document.getElementById('edgeInsetVal')
   if (oEl) oEl.textContent = op.toFixed(2)
   if (fEl) fEl.textContent = String(Math.round(fs))
   if (sEl) sEl.textContent = String(Math.round(sp))
   if (bgEl) bgEl.textContent = Number.isFinite(bgOp) ? bgOp.toFixed(2) : '0.00'
+  if (eiEl) eiEl.textContent = String(Math.round(Number.isFinite(ei) ? ei : 0))
 }
 
 function readBlockWords(): string[] {
@@ -106,9 +109,8 @@ function syncFormFromConfig(c: AppConfig): void {
   $('opacity').value = String(c.opacity)
   $('fontSize').value = String(c.fontSize)
   $('speed').value = String(c.speedPxPerSec)
-  $('maxOn').value = String(c.maxOnScreen)
-  $('maxQ').value = String(c.maxQueue)
   $('lanePad').value = String(c.lanePadding)
+  $('edgeInset').value = String(c.edgeInset)
   $('fontColor').value = c.fontColor
   $('danmakuBgColor').value = c.danmakuBgColor
   $('danmakuBgOpacity').value = String(c.danmakuBgOpacity)
@@ -236,18 +238,23 @@ $('dupMode').addEventListener('change', () => {
 function readNumericPartial(): Partial<AppConfig> {
   return {
     simulateIntervalMs: Math.max(200, Number($('simMs').value) || 800),
-    maxOnScreen: Math.min(200, Math.max(5, Number($('maxOn').value) || 40)),
-    maxQueue: Math.min(2000, Math.max(20, Number($('maxQ').value) || 200)),
     lanePadding: Math.min(40, Math.max(0, Number($('lanePad').value) || 6)),
+    edgeInset: Math.min(160, Math.max(0, Math.round(Number($('edgeInset').value) || 0))),
     duplicateMergeWindowSec: Math.min(300, Math.max(1, Math.round(Number($('dupWindowSec').value) || 10)))
   }
 }
 
-for (const id of ['simMs', 'maxOn', 'maxQ', 'lanePad', 'dupWindowSec'] as const) {
+for (const id of ['simMs', 'lanePad', 'dupWindowSec'] as const) {
   $(id).addEventListener('change', () => {
     void applyNow(readNumericPartial())
   })
 }
+
+$('edgeInset').addEventListener('input', () => {
+  updateLabels()
+  const v = Math.min(160, Math.max(0, Math.round(Number($('edgeInset').value) || 0)))
+  void applyNow({ edgeInset: v })
+})
 
 $('block').addEventListener('blur', () => {
   void applyNow({ blockWords: readBlockWords() })

@@ -562,28 +562,23 @@
 
             <div class="setting-item setting-inline">
               <div class="setting-info">
-                <div class="setting-label">同屏条数上限</div>
-              </div>
-              <div class="setting-control">
-                <input id="maxOn" class="input-compact" type="number" min="5" max="200" value="40" />
-              </div>
-            </div>
-
-            <div class="setting-item setting-inline">
-              <div class="setting-info">
-                <div class="setting-label">排队条数上限</div>
-              </div>
-              <div class="setting-control">
-                <input id="maxQ" class="input-compact" type="number" min="20" max="2000" value="200" />
-              </div>
-            </div>
-
-            <div class="setting-item setting-inline">
-              <div class="setting-info">
                 <div class="setting-label">行间距</div>
               </div>
               <div class="setting-control">
                 <input id="lanePad" class="input-compact" type="number" min="0" max="40" value="6" />
+              </div>
+            </div>
+
+            <div class="setting-item">
+              <div class="setting-info">
+                <div class="setting-label">屏幕边距</div>
+                <div class="setting-desc">弹幕轨道与屏幕四边的最小距离（像素）</div>
+              </div>
+              <div class="setting-control">
+                <div class="range-wrapper">
+                  <input id="edgeInset" type="range" min="0" max="160" step="2" value="0" />
+                  <span class="range-val"><span id="edgeInsetVal">0</span>px</span>
+                </div>
               </div>
             </div>
           </div>

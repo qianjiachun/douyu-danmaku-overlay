@@ -48,8 +48,6 @@ export const DEFAULT_CONFIG: AppConfig = {
   danmakuScrollDirection: 'horizontal',
   opacity: 0.92,
   speedPxPerSec: 140,
-  maxOnScreen: 40,
-  maxQueue: 200,
   blockWords: [],
   /** 昵称（nn）黑名单：发送者昵称包含任一规则即屏蔽整条；逗号分隔，子串、不区分大小写 */
   blockNicks: [],
@@ -60,6 +58,8 @@ export const DEFAULT_CONFIG: AppConfig = {
   /** 「合并变大」时：与上一条同文案间隔小于该秒数才计入连击并逐渐放大 */
   duplicateMergeWindowSec: 10,
   lanePadding: 6,
+  /** 弹幕轨道与屏幕四边（上/下/左/右）的最小留白，像素 */
+  edgeInset: 0,
   simulateDanmaku: false,
   simulateIntervalMs: 800,
   /** 为 true 时用 WS 包中的 col 映射文字颜色，否则统一用 fontColor */
@@ -87,8 +87,6 @@ export interface AppConfig {
   /** 0–1，窗口整体透明度（Electron 层） */
   opacity: number
   speedPxPerSec: number
-  maxOnScreen: number
-  maxQueue: number
   blockWords: string[]
   /** 昵称（nn）黑名单：仅匹配发送者昵称，子串、不区分大小写；逗号分隔，规则与屏蔽词列表解析一致 */
   blockNicks: string[]
@@ -96,6 +94,7 @@ export interface AppConfig {
   duplicateDanmakuMode: DuplicateDanmakuMode
   duplicateMergeWindowSec: number
   lanePadding: number
+  edgeInset: number
   simulateDanmaku: boolean
   simulateIntervalMs: number
   showDanmakuColor: boolean
@@ -179,7 +178,11 @@ function normalizeDanmakuBgColor(v: unknown): string {
 }
 
 export function mergeConfig(partial: Partial<AppConfig> | undefined): AppConfig {
-  const merged = { ...DEFAULT_CONFIG, ...(partial ?? {}) } as AppConfig & { blockUserIds?: unknown }
+  const merged = { ...DEFAULT_CONFIG, ...(partial ?? {}) } as AppConfig & {
+    blockUserIds?: unknown
+    maxOnScreen?: unknown
+    maxQueue?: unknown
+  }
   merged.overlayArea = normalizeOverlayArea(merged.overlayArea)
   merged.overlayDisplayMode = normalizeOverlayDisplayMode(merged.overlayDisplayMode)
   merged.overlayDisplayId = String(merged.overlayDisplayId ?? '').trim()
@@ -210,6 +213,10 @@ export function mergeConfig(partial: Partial<AppConfig> | undefined): AppConfig 
   merged.danmakuBgColor = normalizeDanmakuBgColor(merged.danmakuBgColor)
   const bgOp = Number(merged.danmakuBgOpacity)
   merged.danmakuBgOpacity = Number.isFinite(bgOp) ? Math.min(1, Math.max(0, bgOp)) : DEFAULT_CONFIG.danmakuBgOpacity
+  const ei = Number(merged.edgeInset)
+  merged.edgeInset = Number.isFinite(ei) ? Math.min(160, Math.max(0, Math.round(ei))) : DEFAULT_CONFIG.edgeInset
+  Reflect.deleteProperty(merged, 'maxOnScreen')
+  Reflect.deleteProperty(merged, 'maxQueue')
   return merged
 }
 

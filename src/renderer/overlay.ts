@@ -53,8 +53,20 @@ function laneHeight(cfg: AppConfig): number {
   return cfg.fontSize * 1.25 + cfg.lanePadding
 }
 
+function edgeInsetPx(cfg: AppConfig): number {
+  return Math.max(0, Math.min(160, Math.round(cfg.edgeInset)))
+}
+
+function usableHeight(cfg: AppConfig): number {
+  return Math.max(0, window.innerHeight - 2 * edgeInsetPx(cfg))
+}
+
+function usableWidth(cfg: AppConfig): number {
+  return Math.max(0, window.innerWidth - 2 * edgeInsetPx(cfg))
+}
+
 function laneCount(cfg: AppConfig): number {
-  return Math.max(1, Math.floor(window.innerHeight / laneHeight(cfg)))
+  return Math.max(1, Math.floor(usableHeight(cfg) / laneHeight(cfg)))
 }
 
 function measureText(text: string, fontPx: number): number {
@@ -83,35 +95,67 @@ function measureBulletWidthFields(base: string, count: number, fontPx: number): 
   return mw + SUFFIX_GAP + sw + WIDTH_PADDING
 }
 
-function measureBulletWidth(b: Bullet): number {
+/** 竖排：列宽取主文与角标中单字最大宽度，右侧仍留 WIDTH_PADDING 作轨距 */
+function measureBulletWidthFieldsVertical(base: string, count: number, fontPx: number): number {
+  let maxW = 0
+  for (const ch of Array.from(base)) {
+    maxW = Math.max(maxW, measureText(ch, fontPx))
+  }
+  if (maxW <= 0) maxW = fontPx * 0.5
+  if (count > 1) {
+    const sf = suffixFontPx(fontPx)
+    for (const ch of Array.from(suffixLabel(count))) {
+      maxW = Math.max(maxW, measureText(ch, sf))
+    }
+  }
+  return maxW + WIDTH_PADDING
+}
+
+function measureBulletWidth(b: Bullet, cfg: AppConfig): number {
+  if (cfg.danmakuScrollDirection === 'vertical') {
+    return measureBulletWidthFieldsVertical(b.base, b.count, b.fontPx)
+  }
   return measureBulletWidthFields(b.base, b.count, b.fontPx)
+}
+
+/** 竖向堆叠：相邻字基线间距 */
+function verticalStackStep(fontPx: number): number {
+  return fontPx * 1.12
 }
 
 function mergeWindowMs(cfg: AppConfig): number {
   return Math.max(1, cfg.duplicateMergeWindowSec) * 1000
 }
 
-/** 新弹幕入屏左边缘（略超出视口右侧） */
-function spawnLeftX(): number {
-  return window.innerWidth + 4
+/** 新弹幕入屏左边缘（略超出内容区右侧） */
+function spawnLeftX(cfg: AppConfig): number {
+  return window.innerWidth - edgeInsetPx(cfg) + 4
 }
 
-/** 竖向飘：新弹幕基线 Y（略高于视口上沿） */
-function spawnBaselineY(fontPx: number): number {
-  return -fontPx * 0.85
+/** 竖向飘：整条先在屏幕上方，再缓慢进入视口 */
+function spawnBaselineY(base: string, fontPx: number, count: number): number {
+  const span = verticalTextStackSpan(0, base, fontPx, count)
+  const h = Math.max(1, span.bottom - span.top)
+  return -h - 4
 }
 
 function verticalLaneWidth(cfg: AppConfig): number {
-  return Math.max(96, Math.round(cfg.fontSize * 9)) + cfg.lanePadding * 2
+  // 竖排是一列单字，列宽应接近单字宽度，而不是整行文字宽度。
+  return Math.max(26, Math.round(cfg.fontSize * 1.65) + cfg.lanePadding * 2)
 }
 
 function laneCountVertical(cfg: AppConfig): number {
-  return Math.max(1, Math.floor(window.innerWidth / verticalLaneWidth(cfg)))
+  return Math.max(1, Math.floor(usableWidth(cfg) / verticalLaneWidth(cfg)))
 }
 
-/** 竖向同轨：与现有弹幕在 Y 轴是否重叠（含间隔） */
-const SPAWN_VERTICAL_GAP = 16
+/** 竖向：列中心 X；lane 0 贴右侧内容区，lane 越大越靠左 */
+function verticalLaneCenterX(lane: number, cfg: AppConfig): number {
+  const lw = verticalLaneWidth(cfg)
+  const right = window.innerWidth - edgeInsetPx(cfg)
+  return right - (lane + 0.5) * lw
+}
 
+/** 横向排版弹幕在基线 y 上的外接竖直范围（横向飘用） */
 function verticalSpanFromBaseline(y: number, fontPx: number, count: number): { top: number; bottom: number } {
   let bottom = y + fontPx * 0.35
   if (count > 1) {
@@ -122,17 +166,46 @@ function verticalSpanFromBaseline(y: number, fontPx: number, count: number): { t
   return { top: y - fontPx * 1.12, bottom }
 }
 
+/** 竖向飘：首字基线在 y，正文逐字向下，角标接在最末字之下 */
+function verticalTextStackSpan(
+  yFirst: number,
+  base: string,
+  fontPx: number,
+  count: number
+): { top: number; bottom: number } {
+  const chars = Array.from(base)
+  const step = verticalStackStep(fontPx)
+  const n = Math.max(1, chars.length)
+  const lastBaseline = yFirst + (n - 1) * step
+  let bottom = lastBaseline + fontPx * 0.35
+  if (count > 1) {
+    const sf = suffixFontPx(fontPx)
+    const sy = lastBaseline + step * 0.92
+    bottom = Math.max(bottom, sy + sf * 0.9)
+  }
+  return { top: yFirst - fontPx * 1.12, bottom }
+}
+
+function bulletVerticalSpan(b: Bullet, cfg: AppConfig): { top: number; bottom: number } {
+  if (cfg.danmakuScrollDirection === 'vertical') {
+    return verticalTextStackSpan(b.y, b.base, b.fontPx, b.count)
+  }
+  return verticalSpanFromBaseline(b.y, b.fontPx, b.count)
+}
+
 function laneAcceptsSpawnVertical(
   lane: number,
   baselineY: number,
   fontPx: number,
-  count: number
+  count: number,
+  base: string,
+  cfg: AppConfig
 ): boolean {
-  const g = SPAWN_VERTICAL_GAP
-  const { top: nt, bottom: nb } = verticalSpanFromBaseline(baselineY, fontPx, count)
+  const g = Math.max(6, Math.min(18, Math.round(fontPx * 0.3)))
+  const { top: nt, bottom: nb } = verticalTextStackSpan(baselineY, base, fontPx, count)
   for (const b of bullets) {
     if (b.lane !== lane) continue
-    const { top: bt, bottom: bb } = verticalSpanFromBaseline(b.y, b.fontPx, b.count)
+    const { top: bt, bottom: bb } = bulletVerticalSpan(b, cfg)
     const separated = bb <= nt - g || bt >= nb + g
     if (!separated) return false
   }
@@ -170,12 +243,10 @@ function baseInFlight(base: string): boolean {
 
 function pushQueued(item: QueuedDanmaku): void {
   if (!config) return
-  if (queue.length < config.maxQueue) queue.push(item)
-  else queue.shift(), queue.push(item)
+  queue.push(item)
 }
 
 function trySpawn(cfg: AppConfig): void {
-  if (bullets.length >= cfg.maxOnScreen) return
   if (queue.length === 0) return
 
   const item = queue[0]!
@@ -193,23 +264,22 @@ function trySpawn(cfg: AppConfig): void {
 
   if (cfg.danmakuScrollDirection === 'vertical') {
     const lanes = laneCountVertical(cfg)
-    const lw = verticalLaneWidth(cfg)
-    const sy = spawnBaselineY(fontPx)
-    w = measureBulletWidthFields(item.base, item.count, fontPx)
+    const sy = spawnBaselineY(item.base, fontPx, item.count)
+    w = measureBulletWidthFieldsVertical(item.base, item.count, fontPx)
     for (let lane = 0; lane < lanes; lane++) {
-      if (laneAcceptsSpawnVertical(lane, sy, fontPx, item.count)) {
+      if (laneAcceptsSpawnVertical(lane, sy, fontPx, item.count, item.base, cfg)) {
         chosenLane = lane
         break
       }
     }
     if (chosenLane < 0) return
-    x = chosenLane * lw + 4
+    x = verticalLaneCenterX(chosenLane, cfg)
     y = sy
   } else {
     const lanes = laneCount(cfg)
     const lh = laneHeight(cfg)
     w = measureBulletWidthFields(item.base, item.count, fontPx)
-    const sx = spawnLeftX()
+    const sx = spawnLeftX(cfg)
     for (let lane = 0; lane < lanes; lane++) {
       if (laneAcceptsSpawn(lane, sx, w)) {
         chosenLane = lane
@@ -218,7 +288,7 @@ function trySpawn(cfg: AppConfig): void {
     }
     if (chosenLane < 0) return
     x = sx
-    y = chosenLane * lh + fontPx
+    y = edgeInsetPx(cfg) + chosenLane * lh + fontPx
   }
 
   queue.shift()
@@ -234,7 +304,7 @@ function trySpawn(cfg: AppConfig): void {
     lastMergeAt: item.lastMergeAt,
     danmakuRgb: item.danmakuRgb
   }
-  bullet.w = measureBulletWidth(bullet)
+  bullet.w = measureBulletWidth(bullet, cfg)
   bullets.push(bullet)
 }
 
@@ -243,21 +313,20 @@ function animateBulletFonts(cfg: AppConfig, dt: number): void {
   const lh = laneHeight(cfg)
   const k = 1 - Math.exp(-dt * 14)
   const vertical = cfg.danmakuScrollDirection === 'vertical'
-  const lw = verticalLaneWidth(cfg)
   for (const b of bullets) {
     if (Math.abs(b.targetFontPx - b.fontPx) < 0.45) {
       if (b.fontPx !== b.targetFontPx) {
         b.fontPx = b.targetFontPx
-        b.w = measureBulletWidth(b)
-        if (vertical) b.x = b.lane * lw + 4
-        else b.y = b.lane * lh + b.fontPx
+        b.w = measureBulletWidth(b, cfg)
+        if (vertical) b.x = verticalLaneCenterX(b.lane, cfg)
+        else b.y = edgeInsetPx(cfg) + b.lane * lh + b.fontPx
       }
       continue
     }
     b.fontPx += (b.targetFontPx - b.fontPx) * k
-    b.w = measureBulletWidth(b)
-    if (vertical) b.x = b.lane * lw + 4
-    else b.y = b.lane * lh + b.fontPx
+    b.w = measureBulletWidth(b, cfg)
+    if (vertical) b.x = verticalLaneCenterX(b.lane, cfg)
+    else b.y = edgeInsetPx(cfg) + b.lane * lh + b.fontPx
   }
 }
 
@@ -278,11 +347,12 @@ function danmakuBgFillStyle(cfg: AppConfig): string | null {
 function drawDanmakuBackground(b: Bullet, cfg: AppConfig): void {
   const fill = danmakuBgFillStyle(cfg)
   if (!fill) return
-  const span = verticalSpanFromBaseline(b.y, b.fontPx, b.count)
-  /** `b.w` 含右侧 WIDTH_PADDING（轨道防叠用），衬底只包文字区域，左右留白对称 */
+  const span = bulletVerticalSpan(b, cfg)
+  /** `b.w` 含 WIDTH_PADDING（轨距），衬底只包字形区域，左右对称 */
   const contentW = Math.max(0, b.w - WIDTH_PADDING)
   const padH = 5
-  const x = b.x - padH
+  const vertical = cfg.danmakuScrollDirection === 'vertical'
+  const x = vertical ? b.x - contentW / 2 - padH : b.x - padH
   const y = span.top - 2
   const w = contentW + 2 * padH
   const h = span.bottom - span.top + 4
@@ -293,10 +363,38 @@ function drawDanmakuBackground(b: Bullet, cfg: AppConfig): void {
   ctx.fill()
 }
 
+/** 竖向飘：正文逐字自上而下，`b.x` 为列水平中心 */
+function drawBulletVerticalStack(b: Bullet): void {
+  const step = verticalStackStep(b.fontPx)
+  const chars = Array.from(b.base)
+  ctx.textAlign = 'center'
+  ctx.textBaseline = 'alphabetic'
+  ctx.font = `${b.fontPx}px system-ui, "Segoe UI", sans-serif`
+  let i = 0
+  for (const ch of chars) {
+    ctx.fillText(ch, b.x, b.y + i * step)
+    i++
+  }
+  if (b.count > 1) {
+    const sf = suffixFontPx(b.fontPx)
+    const n = Math.max(1, chars.length)
+    const lastBaseline = b.y + (n - 1) * step
+    const sy = lastBaseline + step * 0.92
+    ctx.font = `${sf}px system-ui, "Segoe UI", sans-serif`
+    ctx.fillText(suffixLabel(b.count), b.x, sy)
+  }
+}
+
 function drawBullet(b: Bullet, cfg: AppConfig): void {
   drawDanmakuBackground(b, cfg)
   ctx.fillStyle = bulletFillStyle(cfg, b)
   ctx.textBaseline = 'alphabetic'
+  if (cfg.danmakuScrollDirection === 'vertical') {
+    drawBulletVerticalStack(b)
+    ctx.textAlign = 'start'
+    return
+  }
+  ctx.textAlign = 'left'
   ctx.font = `${b.fontPx}px system-ui, "Segoe UI", sans-serif`
   ctx.fillText(b.base, b.x, b.y)
   if (b.count > 1) {
@@ -316,7 +414,7 @@ function tick(ts: number): void {
   const dt = lastTs ? Math.min(0.05, (ts - lastTs) / 1000) : 0
   lastTs = ts
 
-  while (queue.length > 0 && bullets.length < cfg.maxOnScreen) {
+  while (queue.length > 0) {
     const n = bullets.length
     trySpawn(cfg)
     if (bullets.length === n) break
@@ -324,17 +422,18 @@ function tick(ts: number): void {
 
   const speed = cfg.speedPxPerSec
   const vertical = cfg.danmakuScrollDirection === 'vertical'
+  const edge = edgeInsetPx(cfg)
   for (let i = bullets.length - 1; i >= 0; i--) {
     const b = bullets[i]!
     if (vertical) {
       b.y += speed * dt
-      const { top } = verticalSpanFromBaseline(b.y, b.fontPx, b.count)
-      if (top > window.innerHeight + 40) {
+      const { top } = bulletVerticalSpan(b, cfg)
+      if (top > window.innerHeight - edge + 40) {
         bullets.splice(i, 1)
       }
     } else {
       b.x -= speed * dt
-      if (b.x + b.w < -20) {
+      if (b.x + b.w < edge - 12) {
         bullets.splice(i, 1)
       }
     }
@@ -347,7 +446,7 @@ function tick(ts: number): void {
     drawBullet(b, cfg)
   }
 
-  while (queue.length > 0 && bullets.length < cfg.maxOnScreen) {
+  while (queue.length > 0) {
     const n = bullets.length
     trySpawn(cfg)
     if (bullets.length === n) break
@@ -389,7 +488,7 @@ function enqueueDanmaku(d: DanmakuPayload): void {
       existingBullet.count++
       existingBullet.targetFontPx = mergeFontPx(cfg.fontSize, existingBullet.count)
       existingBullet.lastMergeAt = now
-      existingBullet.w = measureBulletWidth(existingBullet)
+      existingBullet.w = measureBulletWidth(existingBullet, cfg)
       return
     }
 
