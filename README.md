@@ -102,6 +102,6 @@ A: 当前版本以 Windows 为主，其他平台暂未承诺支持。
 
 ## 📌 Release
 
-- 当前版本：`v1.1.0`
-- 发布地址：[v1.1.0 Release](https://github.com/qianjiachun/douyu-danmaku-overlay/releases/tag/v1.1.0)
+- 当前版本：`v1.2.0`
+- 发布地址：[v1.2.0 Release](https://github.com/qianjiachun/douyu-danmaku-overlay/releases/tag/v1.2.0)
 - 每个版本 Assets **仅提供 Windows 便携版 exe**，解压即用，配置随文件夹迁移。
