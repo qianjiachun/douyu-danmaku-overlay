@@ -440,12 +440,47 @@
               </div>
             </div>
 
+            <div class="setting-item">
+              <div class="setting-info">
+                <div class="setting-label">飘动方向</div>
+                <div class="setting-desc">横向为从右向左；竖向为自上而下</div>
+              </div>
+              <div class="setting-control">
+                <select id="scrollDir">
+                  <option value="horizontal">横向飘</option>
+                  <option value="vertical">竖向飘（自上而下）</option>
+                </select>
+              </div>
+            </div>
+
             <div class="setting-item setting-inline">
               <div class="setting-info">
-                <div class="setting-label">字体颜色</div>
+                <div class="setting-label">弹幕颜色</div>
               </div>
               <div class="setting-control">
                 <input id="fontColor" type="color" value="#ffffff" />
+              </div>
+            </div>
+
+            <div class="setting-item setting-inline">
+              <div class="setting-info">
+                <div class="setting-label">弹幕背景色</div>
+              </div>
+              <div class="setting-control">
+                <input id="danmakuBgColor" type="color" value="#000000" />
+              </div>
+            </div>
+
+            <div class="setting-item">
+              <div class="setting-info">
+                <div class="setting-label">背景不透明度</div>
+                <div class="setting-desc">为 0 时不绘制背景；调高后出现衬底</div>
+              </div>
+              <div class="setting-control">
+                <div class="range-wrapper">
+                  <input id="danmakuBgOpacity" type="range" min="0" max="1" step="0.02" value="0" />
+                  <span class="range-val" id="danmakuBgOpacityVal">0.00</span>
+                </div>
               </div>
             </div>
 

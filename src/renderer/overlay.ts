@@ -7,7 +7,7 @@ interface QueuedDanmaku {
   count: number
   /** 最近一次连击合并时间（毫秒），用于合并时间窗口 */
   lastMergeAt: number
-  /** 已解析的弹幕色；null 表示用设置里的 fontColor */
+  /** 已解析的弹幕色；null 表示用设置里的 fontColor（弹幕颜色） */
   danmakuRgb: string | null
 }
 
@@ -96,6 +96,49 @@ function spawnLeftX(): number {
   return window.innerWidth + 4
 }
 
+/** 竖向飘：新弹幕基线 Y（略高于视口上沿） */
+function spawnBaselineY(fontPx: number): number {
+  return -fontPx * 0.85
+}
+
+function verticalLaneWidth(cfg: AppConfig): number {
+  return Math.max(96, Math.round(cfg.fontSize * 9)) + cfg.lanePadding * 2
+}
+
+function laneCountVertical(cfg: AppConfig): number {
+  return Math.max(1, Math.floor(window.innerWidth / verticalLaneWidth(cfg)))
+}
+
+/** 竖向同轨：与现有弹幕在 Y 轴是否重叠（含间隔） */
+const SPAWN_VERTICAL_GAP = 16
+
+function verticalSpanFromBaseline(y: number, fontPx: number, count: number): { top: number; bottom: number } {
+  let bottom = y + fontPx * 0.35
+  if (count > 1) {
+    const sf = suffixFontPx(fontPx)
+    const sy = y + Math.max(1, Math.round(fontPx * 0.15))
+    bottom = Math.max(bottom, sy + sf)
+  }
+  return { top: y - fontPx * 1.12, bottom }
+}
+
+function laneAcceptsSpawnVertical(
+  lane: number,
+  baselineY: number,
+  fontPx: number,
+  count: number
+): boolean {
+  const g = SPAWN_VERTICAL_GAP
+  const { top: nt, bottom: nb } = verticalSpanFromBaseline(baselineY, fontPx, count)
+  for (const b of bullets) {
+    if (b.lane !== lane) continue
+    const { top: bt, bottom: bb } = verticalSpanFromBaseline(b.y, b.fontPx, b.count)
+    const separated = bb <= nt - g || bt >= nb + g
+    if (!separated) return false
+  }
+  return true
+}
+
 /** 同一轨道上横向间隔（像素），避免相邻弹幕贴边重叠 */
 const SPAWN_HORIZONTAL_GAP = 14
 
@@ -135,8 +178,6 @@ function trySpawn(cfg: AppConfig): void {
   if (bullets.length >= cfg.maxOnScreen) return
   if (queue.length === 0) return
 
-  const lanes = laneCount(cfg)
-  const lh = laneHeight(cfg)
   const item = queue[0]!
   const targetFontPx =
     cfg.duplicateDanmakuMode === 'merge' && item.count > 1
@@ -145,24 +186,48 @@ function trySpawn(cfg: AppConfig): void {
   const fontPx =
     cfg.duplicateDanmakuMode === 'merge' && item.count > 1 ? cfg.fontSize : targetFontPx
 
-  let w = measureBulletWidthFields(item.base, item.count, fontPx)
-  const sx = spawnLeftX()
   let chosenLane = -1
-  for (let lane = 0; lane < lanes; lane++) {
-    if (laneAcceptsSpawn(lane, sx, w)) {
-      chosenLane = lane
-      break
+  let x = 0
+  let y = 0
+  let w = 0
+
+  if (cfg.danmakuScrollDirection === 'vertical') {
+    const lanes = laneCountVertical(cfg)
+    const lw = verticalLaneWidth(cfg)
+    const sy = spawnBaselineY(fontPx)
+    w = measureBulletWidthFields(item.base, item.count, fontPx)
+    for (let lane = 0; lane < lanes; lane++) {
+      if (laneAcceptsSpawnVertical(lane, sy, fontPx, item.count)) {
+        chosenLane = lane
+        break
+      }
     }
+    if (chosenLane < 0) return
+    x = chosenLane * lw + 4
+    y = sy
+  } else {
+    const lanes = laneCount(cfg)
+    const lh = laneHeight(cfg)
+    w = measureBulletWidthFields(item.base, item.count, fontPx)
+    const sx = spawnLeftX()
+    for (let lane = 0; lane < lanes; lane++) {
+      if (laneAcceptsSpawn(lane, sx, w)) {
+        chosenLane = lane
+        break
+      }
+    }
+    if (chosenLane < 0) return
+    x = sx
+    y = chosenLane * lh + fontPx
   }
-  if (chosenLane < 0) return
 
   queue.shift()
   const bullet: Bullet = {
-    x: sx,
-    y: chosenLane * lh + fontPx,
+    x,
+    y,
     base: item.base,
     count: item.count,
-    w: w,
+    w,
     lane: chosenLane,
     fontPx,
     targetFontPx,
@@ -177,18 +242,22 @@ function animateBulletFonts(cfg: AppConfig, dt: number): void {
   if (dt <= 0) return
   const lh = laneHeight(cfg)
   const k = 1 - Math.exp(-dt * 14)
+  const vertical = cfg.danmakuScrollDirection === 'vertical'
+  const lw = verticalLaneWidth(cfg)
   for (const b of bullets) {
     if (Math.abs(b.targetFontPx - b.fontPx) < 0.45) {
       if (b.fontPx !== b.targetFontPx) {
         b.fontPx = b.targetFontPx
         b.w = measureBulletWidth(b)
-        b.y = b.lane * lh + b.fontPx
+        if (vertical) b.x = b.lane * lw + 4
+        else b.y = b.lane * lh + b.fontPx
       }
       continue
     }
     b.fontPx += (b.targetFontPx - b.fontPx) * k
     b.w = measureBulletWidth(b)
-    b.y = b.lane * lh + b.fontPx
+    if (vertical) b.x = b.lane * lw + 4
+    else b.y = b.lane * lh + b.fontPx
   }
 }
 
@@ -197,7 +266,35 @@ function bulletFillStyle(cfg: AppConfig, b: Bullet): string {
   return cfg.fontColor
 }
 
+function danmakuBgFillStyle(cfg: AppConfig): string | null {
+  const a = cfg.danmakuBgOpacity
+  if (a <= 0) return null
+  const hex = cfg.danmakuBgColor.trim()
+  const m = /^#?([0-9a-fA-F]{2})([0-9a-fA-F]{2})([0-9a-fA-F]{2})$/i.exec(hex)
+  if (!m) return `rgba(0,0,0,${a})`
+  return `rgba(${parseInt(m[1], 16)},${parseInt(m[2], 16)},${parseInt(m[3], 16)},${a})`
+}
+
+function drawDanmakuBackground(b: Bullet, cfg: AppConfig): void {
+  const fill = danmakuBgFillStyle(cfg)
+  if (!fill) return
+  const span = verticalSpanFromBaseline(b.y, b.fontPx, b.count)
+  /** `b.w` 含右侧 WIDTH_PADDING（轨道防叠用），衬底只包文字区域，左右留白对称 */
+  const contentW = Math.max(0, b.w - WIDTH_PADDING)
+  const padH = 5
+  const x = b.x - padH
+  const y = span.top - 2
+  const w = contentW + 2 * padH
+  const h = span.bottom - span.top + 4
+  ctx.fillStyle = fill
+  const r = Math.min(8, h / 2, w / 2)
+  ctx.beginPath()
+  ctx.roundRect(x, y, w, h, r)
+  ctx.fill()
+}
+
 function drawBullet(b: Bullet, cfg: AppConfig): void {
+  drawDanmakuBackground(b, cfg)
   ctx.fillStyle = bulletFillStyle(cfg, b)
   ctx.textBaseline = 'alphabetic'
   ctx.font = `${b.fontPx}px system-ui, "Segoe UI", sans-serif`
@@ -226,11 +323,20 @@ function tick(ts: number): void {
   }
 
   const speed = cfg.speedPxPerSec
+  const vertical = cfg.danmakuScrollDirection === 'vertical'
   for (let i = bullets.length - 1; i >= 0; i--) {
     const b = bullets[i]!
-    b.x -= speed * dt
-    if (b.x + b.w < -20) {
-      bullets.splice(i, 1)
+    if (vertical) {
+      b.y += speed * dt
+      const { top } = verticalSpanFromBaseline(b.y, b.fontPx, b.count)
+      if (top > window.innerHeight + 40) {
+        bullets.splice(i, 1)
+      }
+    } else {
+      b.x -= speed * dt
+      if (b.x + b.w < -20) {
+        bullets.splice(i, 1)
+      }
     }
   }
 

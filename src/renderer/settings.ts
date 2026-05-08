@@ -2,6 +2,7 @@ import {
   OVERLAY_AREA_OPTIONS,
   parseBlockWordsText,
   type AppConfig,
+  type DanmakuScrollDirection,
   type DuplicateDanmakuMode,
   type OverlayAreaPreset,
   type OverlayDisplayListItem
@@ -36,12 +37,15 @@ function updateLabels(): void {
   const op = Number($('opacity').value)
   const fs = Number($('fontSize').value)
   const sp = Number($('speed').value)
+  const bgOp = Number($('danmakuBgOpacity').value)
   const oEl = document.getElementById('opacityVal')
   const fEl = document.getElementById('fontSizeVal')
   const sEl = document.getElementById('speedVal')
+  const bgEl = document.getElementById('danmakuBgOpacityVal')
   if (oEl) oEl.textContent = op.toFixed(2)
   if (fEl) fEl.textContent = String(Math.round(fs))
   if (sEl) sEl.textContent = String(Math.round(sp))
+  if (bgEl) bgEl.textContent = Number.isFinite(bgOp) ? bgOp.toFixed(2) : '0.00'
 }
 
 function readBlockWords(): string[] {
@@ -106,6 +110,9 @@ function syncFormFromConfig(c: AppConfig): void {
   $('maxQ').value = String(c.maxQueue)
   $('lanePad').value = String(c.lanePadding)
   $('fontColor').value = c.fontColor
+  $('danmakuBgColor').value = c.danmakuBgColor
+  $('danmakuBgOpacity').value = String(c.danmakuBgOpacity)
+  $('scrollDir').value = c.danmakuScrollDirection
   $('showDanmakuColor').checked = c.showDanmakuColor
   $('filterRobotDanmaku').checked = c.filterRobotDanmaku
   $('dupMode').value = c.duplicateDanmakuMode
@@ -190,6 +197,20 @@ $('speed').addEventListener('input', () => {
 
 $('fontColor').addEventListener('input', () => {
   void applyNow({ fontColor: $('fontColor').value })
+})
+
+$('danmakuBgColor').addEventListener('input', () => {
+  void applyNow({ danmakuBgColor: $('danmakuBgColor').value })
+})
+
+$('danmakuBgOpacity').addEventListener('input', () => {
+  updateLabels()
+  const v = Math.min(1, Math.max(0, Number($('danmakuBgOpacity').value) || 0))
+  void applyNow({ danmakuBgOpacity: v })
+})
+
+$('scrollDir').addEventListener('change', () => {
+  void applyNow({ danmakuScrollDirection: $('scrollDir').value as DanmakuScrollDirection })
 })
 
 $('showDanmakuColor').addEventListener('change', () => {

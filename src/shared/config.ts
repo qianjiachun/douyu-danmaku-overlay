@@ -26,6 +26,9 @@ export type OverlayAreaPreset =
   | 'quarterBL'
   | 'quarterBR'
 
+/** 弹幕运动方向：横向（从右向左）或竖向（从上到下） */
+export type DanmakuScrollDirection = 'horizontal' | 'vertical'
+
 export const DEFAULT_CONFIG: AppConfig = {
   roomId: '',
   /** 总开关：关则隐藏飘屏窗口并停止拉流 */
@@ -38,6 +41,11 @@ export const DEFAULT_CONFIG: AppConfig = {
   overlayDisplayId: '',
   fontSize: 22,
   fontColor: '#ffffff',
+  /** 单条弹幕背后衬底颜色（#RRGGBB）；透明度由 danmakuBgOpacity 控制 */
+  danmakuBgColor: '#000000',
+  /** 0–1，弹幕背景不透明度；为 0 时不绘制背景 */
+  danmakuBgOpacity: 0,
+  danmakuScrollDirection: 'horizontal',
   opacity: 0.92,
   speedPxPerSec: 140,
   maxOnScreen: 40,
@@ -54,7 +62,7 @@ export const DEFAULT_CONFIG: AppConfig = {
   lanePadding: 6,
   simulateDanmaku: false,
   simulateIntervalMs: 800,
-  /** 为 true 时用 WS 包中的 col 映射颜色，否则统一用 fontColor */
+  /** 为 true 时用 WS 包中的 col 映射文字颜色，否则统一用 fontColor */
   showDanmakuColor: false,
   /** 为 true 时丢弃无 `dms` 字段的 chatmsg（通常为机器人弹幕） */
   filterRobotDanmaku: true,
@@ -73,6 +81,9 @@ export interface AppConfig {
   overlayDisplayId: string
   fontSize: number
   fontColor: string
+  danmakuBgColor: string
+  danmakuBgOpacity: number
+  danmakuScrollDirection: DanmakuScrollDirection
   /** 0–1，窗口整体透明度（Electron 层） */
   opacity: number
   speedPxPerSec: number
@@ -155,6 +166,18 @@ function normalizeDuplicateMode(v: unknown): DuplicateDanmakuMode {
     : DEFAULT_CONFIG.duplicateDanmakuMode
 }
 
+function normalizeDanmakuScrollDirection(v: unknown): DanmakuScrollDirection {
+  return v === 'vertical' ? 'vertical' : 'horizontal'
+}
+
+const HEX_COLOR_RE = /^#([0-9a-fA-F]{6})$/
+
+function normalizeDanmakuBgColor(v: unknown): string {
+  const s = typeof v === 'string' ? v.trim() : ''
+  if (HEX_COLOR_RE.test(s)) return s
+  return DEFAULT_CONFIG.danmakuBgColor
+}
+
 export function mergeConfig(partial: Partial<AppConfig> | undefined): AppConfig {
   const merged = { ...DEFAULT_CONFIG, ...(partial ?? {}) } as AppConfig & { blockUserIds?: unknown }
   merged.overlayArea = normalizeOverlayArea(merged.overlayArea)
@@ -183,6 +206,10 @@ export function mergeConfig(partial: Partial<AppConfig> | undefined): AppConfig 
   merged.showDanmakuColor = Boolean(merged.showDanmakuColor)
   merged.filterRobotDanmaku = merged.filterRobotDanmaku !== false
   merged.dismissedTrayCloseHint = Boolean(merged.dismissedTrayCloseHint)
+  merged.danmakuScrollDirection = normalizeDanmakuScrollDirection(merged.danmakuScrollDirection)
+  merged.danmakuBgColor = normalizeDanmakuBgColor(merged.danmakuBgColor)
+  const bgOp = Number(merged.danmakuBgOpacity)
+  merged.danmakuBgOpacity = Number.isFinite(bgOp) ? Math.min(1, Math.max(0, bgOp)) : DEFAULT_CONFIG.danmakuBgOpacity
   return merged
 }
 
